@@ -5,7 +5,13 @@ import { CategoryConnector, DetailsConnector, ProductConnector } from "../connec
 import { Category, EWomanCategories, Product } from "../models/ICategories";
 import { ProductEntity } from "../models/product.entity";
 
-type ScraperResult = { success: boolean; data?: Product[] };
+type ScraperResult = {
+  success: boolean;
+  data?: Product[];
+  totalSaved?: number;
+  expectedCount?: number;
+  error?: string;
+};
 
 @Injectable()
 export class ScraperService {
@@ -47,7 +53,6 @@ export class ScraperService {
     let totalProducts = 0;
     let processedProducts = 0;
 
-    // Oblicz całkowitą liczbę produktów
     for (const category of relevantIndexes) {
       const response = await this.productConnector.getProducts(category.id.toString());
       if (response?.productGroups && Array.isArray(response.productGroups)) {
@@ -63,7 +68,6 @@ export class ScraperService {
       }
     }
 
-    // Przetwarzanie produktów
     for (const category of relevantIndexes) {
       const response = await this.productConnector.getProducts(category.id.toString());
       if (!response?.productGroups || !Array.isArray(response.productGroups)) {
@@ -88,29 +92,27 @@ export class ScraperService {
                 id: product.id,
                 name: product.name || "",
                 price: product.price || 0,
-                seoId: product.seo?.seoProductId || String(product.id), // Zawsze zapewnij seoId
-                country: "unknown", // Domyślna wartość
+                seoId: product.seo?.seoProductId || String(product.id),
+                country: "unknown",
                 category: category.name,
               };
 
               try {
                 const productDetails = await this.getDetails(product);
-                if (productDetails) {
-                  productData.country = productDetails.country || "unknown";
-                }
-
+                productData.country = productDetails.country;
                 console.log("Saving product:", {
                   id: productData.id,
-                  name: productData.name.substring(0, 20) + '...' // Skrócona nazwa dla logów
+                  name: productData.name.substring(0, 20) + '...'
                 });
 
                 await this.productRepository.save(
                     this.productRepository.create(productData)
                 );
                 allProducts.push(productData);
-              } catch (error) {
+              } catch (error: unknown) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
                 console.error(`Failed to save product ${product.id}:`, {
-                  error: error.message,
+                  error: errorMessage,
                   productData
                 });
               }
@@ -140,8 +142,9 @@ export class ScraperService {
             ? countryText.replace('Wyprodukowano w ', '')
             : "unknown"
       };
-    } catch (error) {
-      console.error(`Details error for ${productData.id}:`, error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`Details error for ${productData.id}:`, errorMessage);
       return { country: "error" };
     }
   }
@@ -160,17 +163,16 @@ export class ScraperService {
       return {
         success: true,
         data: products,
-        stats: {
-          totalSaved: products.length,
-          expectedCount: await this.countProducts()
-        }
+        totalSaved: products.length,
+        expectedCount: await this.countProducts()
       };
-    } catch (error) {
-      console.error("Scraper fatal error:", error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Scraper fatal error:", errorMessage);
       return {
         success: false,
         data: [],
-        error: error.message
+        error: errorMessage
       };
     }
   }
