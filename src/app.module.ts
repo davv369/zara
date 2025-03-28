@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScraperService } from './scraper/scraper.service';
 import { ProductConnector, CategoryConnector, DetailsConnector } from './connectors/connectos';
 import { ProductEntity } from './models/product.entity';
 import { ScraperModule } from './scraper/scraper.module';
-import {ConfigModule} from "@nestjs/config";
 
 @Module({
   imports: [
@@ -13,13 +13,13 @@ import {ConfigModule} from "@nestjs/config";
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'new_postgres',
-      password: 'newPassword123',
-      database: 'zara_db',
+      url: process.env.DATABASE_URL, // Używamy pełnego URL z Railway
+      ssl: { rejectUnauthorized: false }, // Wymagane dla Railway
       entities: [ProductEntity],
-      synchronize: true, // Ensure this is set to true
+      synchronize: true,
+      extra: {
+        connectionTimeout: 10000, // 10 sekund timeout
+      }
     }),
     TypeOrmModule.forFeature([ProductEntity]),
     ScraperModule,
