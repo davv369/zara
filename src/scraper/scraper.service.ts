@@ -47,6 +47,7 @@ export class ScraperService {
     let totalProducts = 0;
     let processedProducts = 0;
 
+    // Oblicz całkowitą liczbę produktów
     for (const category of relevantIndexes) {
       const response = await this.productConnector.getProducts(category.id.toString());
       if (response?.productGroups && Array.isArray(response.productGroups)) {
@@ -62,6 +63,7 @@ export class ScraperService {
       }
     }
 
+    // Przetwarzanie produktów
     for (const category of relevantIndexes) {
       const response = await this.productConnector.getProducts(category.id.toString());
       if (!response?.productGroups || !Array.isArray(response.productGroups)) {
@@ -86,30 +88,37 @@ export class ScraperService {
                 id: product.id,
                 name: product.name || "",
                 price: product.price || 0,
-                seoId: product.seo?.seoProductId || "",
-                country: undefined,
+                seoId: product.seo?.seoProductId || String(product.id), // Zawsze zapewnij seoId
+                country: "unknown", // Domyślna wartość
                 category: category.name,
               };
 
-              const productDetails = await this.getDetails(product);
-              if (productDetails) {
-                productData.country = productDetails.country;
-                console.log("Product data:", productData);
-
-                try {
-                  const productEntity = this.productRepository.create(productData);
-                  await this.productRepository.save(productEntity);
-                  console.log(`Saved product with index: ${productData.index}`);
-                  allProducts.push(productData);
-                } catch (error) {
-                  console.error(`Error saving product with index: ${productData.index}`, error);
+              try {
+                const productDetails = await this.getDetails(product);
+                if (productDetails) {
+                  productData.country = productDetails.country || "unknown";
                 }
+
+                console.log("Saving product:", {
+                  id: productData.id,
+                  name: productData.name.substring(0, 20) + '...' // Skrócona nazwa dla logów
+                });
+
+                await this.productRepository.save(
+                    this.productRepository.create(productData)
+                );
+                allProducts.push(productData);
+              } catch (error) {
+                console.error(`Failed to save product ${product.id}:`, {
+                  error: error.message,
+                  productData
+                });
               }
             }
 
             processedProducts++;
             const progress = (processedProducts / totalProducts) * 100;
-            console.log(`Progress: ${Math.round(progress)}% - Processed ${processedProducts} of ${totalProducts} products`);
+            console.log(`Progress: ${progress.toFixed(1)}% (${processedProducts}/${totalProducts})`);
           }
         }
       }
@@ -118,27 +127,29 @@ export class ScraperService {
     return allProducts;
   }
 
-  async getDetails(productData: any): Promise<{ country?: string } | null> {
-    let country: string;
+  async getDetails(productData: any): Promise<{ country: string }> {
     try {
       const details = await this.detailsConnector.getProductDetails(productData.id);
-      if (details && details.length > 0 && details[details.length - 1].components[4]?.text?.value) {
-        country = details[details.length - 1].components[4].text.value.replace('Wyprodukowano w ', '');
-        return { country };
+      if (!details || details.length === 0) {
+        return { country: "unknown" };
       }
-      return null;
+
+      const countryText = details[details.length - 1]?.components[4]?.text?.value;
+      return {
+        country: countryText
+            ? countryText.replace('Wyprodukowano w ', '')
+            : "unknown"
+      };
     } catch (error) {
-      console.error(`Error fetching details for product ${productData.id}:`, error);
-      return null;
+      console.error(`Details error for ${productData.id}:`, error.message);
+      return { country: "error" };
     }
   }
 
   async runScraper(): Promise<ScraperResult> {
     try {
       await this.clearDatabase();
-
-      const afterClearCount = await this.countProducts();
-      console.log(`Number of products after clearing: ${afterClearCount}`);
+      console.log(`Database cleared. Current count: ${await this.countProducts()}`);
 
       const relevantIndexes = await this.getCategories();
       if (relevantIndexes.length === 0) {
@@ -146,10 +157,21 @@ export class ScraperService {
       }
 
       const products = await this.getProducts(relevantIndexes);
-      return { success: true, data: products };
+      return {
+        success: true,
+        data: products,
+        stats: {
+          totalSaved: products.length,
+          expectedCount: await this.countProducts()
+        }
+      };
     } catch (error) {
-      console.error("Error running scraper:", error);
-      return { success: false, data: [] };
+      console.error("Scraper fatal error:", error);
+      return {
+        success: false,
+        data: [],
+        error: error.message
+      };
     }
   }
 }
