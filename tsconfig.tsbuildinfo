@@ -1,0 +1,1 @@
+{"root":["./src/app.module.ts","./src/main.ts","./src/connectors/connectos.ts","./src/scraper/scraper.controller.ts","./src/scraper/scraper.module.ts","./src/scraper/scraper.service.ts","./src/utils/file.utils.ts"],"errors":true,"version":"5.8.2"}
