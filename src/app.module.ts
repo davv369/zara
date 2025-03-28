@@ -13,15 +13,12 @@ import { ScraperModule } from './scraper/scraper.module';
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      url: process.env.DATABASE_URL,
-      ssl: {
-        require: true, // <-- NOWA KONFIGURACJA
-        rejectUnauthorized: false
-      },
+      url: process.env.DATABASE_URL, // Używamy pełnego URL z Railway
+      ssl: { rejectUnauthorized: false }, // Wymagane dla Railway
       entities: [ProductEntity],
       synchronize: true,
       extra: {
-        connectionTimeout: 10000, /
+        connectionTimeout: 10000, // 10 sekund timeout
       }
     }),
     TypeOrmModule.forFeature([ProductEntity]),
