@@ -102,6 +102,7 @@ export class ScraperService {
                 productData.country = productDetails.country;
                 console.log("Saving product:", {
                   id: productData.id,
+                  country: productData.country,
                   name: productData.name.substring(0, 20) + '...'
                 });
 
@@ -129,30 +130,62 @@ export class ScraperService {
     return allProducts;
   }
 
-  async getDetails(productData: any): Promise<{ country: string }> {
+  async getDetails(productData: { id: string }): Promise<{ country: string }> {
     try {
       const details = await this.detailsConnector.getProductDetails(productData.id);
-      if (!details || details.length === 0) {
+
+      if (!details || !Array.isArray(details) || details.length === 0) {
+        console.log(`No details found for product ${productData.id}`);
         return { country: "unknown" };
       }
 
-      const countryText = details[details.length - 1]?.components[4]?.text?.value;
-      return {
-        country: countryText
-            ? countryText.replace('Wyprodukowano w ', '')
-            : "unknown"
-      };
+      let originSection = details.find(section => section.sectionType === "origin");
+      let componentsToSearch
+
+      if (originSection && originSection.components) {
+        componentsToSearch = originSection.components;
+      } else {
+
+        const accordionSection = details.find(section => section.sectionType === "accordion");
+        if (accordionSection && accordionSection.components?.[0]?.datatype === "accordion") {
+          const accordionContent = accordionSection.components[0].sections?.find(
+              (sec: any) => sec.title?.value === "SKŁAD, PIELĘGNACJA I POCHODZENIE"
+          )?.content;
+          if (accordionContent) {
+            componentsToSearch = accordionContent
+          }
+        }
+      }
+
+      if (!componentsToSearch) {
+        console.log(`Origin section not found for product ${productData.id}`);
+        return { country: "unknown" };
+      }
+
+      const countryComponent = componentsToSearch.find((comp: any) =>
+          comp.datatype === "paragraph" &&
+          comp.text?.value?.startsWith("Wyprodukowano w")
+      );
+
+      const countryText = countryComponent?.text?.value;
+      if (!countryText) {
+        console.log(`Country text not found in origin section for product ${productData.id}`);
+        return { country: "unknown" };
+      }
+
+      const country = countryText.replace('Wyprodukowano w ', '').trim();
+      console.log(`Extracted country for product ${productData.id}: ${country}`);
+      return { country };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`Details error for ${productData.id}:`, errorMessage);
-      return { country: "error" };
+      console.error(`Details error for product ${productData.id}: ${errorMessage}`);
+      return { country: "unknown" };
     }
   }
 
+
   async runScraper(): Promise<ScraperResult> {
     try {
-      await this.clearDatabase();
-      console.log(`Database cleared. Current count: ${await this.countProducts()}`);
 
       const relevantIndexes = await this.getCategories();
       if (relevantIndexes.length === 0) {

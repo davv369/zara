@@ -14,15 +14,6 @@ class BaseConnector {
     protected async fetchData(url: string, headers: Record<string, string> = {}): Promise<any> {
         try {
 
-            console.log('Request Headers:', {
-                'User-Agent': USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)], // Losowy User-Agent
-                'Accept-Language': 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7',
-                'Referer': BASE_URL,
-                'DNT': '1', // "Do Not Track"
-                'Connection': 'keep-alive',
-                ...headers, // Możliwość dodania własnych nagłówków
-            });
-
             const response: AxiosResponse = await axios.get(url, {
                 headers: {
                     'User-Agent': USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)], // Losowy User-Agent
